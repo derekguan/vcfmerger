@@ -1,10 +1,12 @@
 CC=g++
-CPPFLAGS= -Wall -O3
+CPPFLAGS= -g -Wall -O3 -fopenmp
 LDFLAGS=
 LIBS=
 
-VCFMERGER_OBJS=vcfmerger.o
-VCFMERGER_HEADERS=
+PREFIX=/usr/bin
+
+VCFMERGER_OBJS=vcfmerger.o main.o
+VCFMERGER_HEADERS=vcfmerger.h
 LIBCRE=crelib/libcre.a
 LIBCRE_OBJS=crelib/*
 
@@ -20,3 +22,10 @@ $(LIBCRE):$(LIBCRE_OBJS)
 
 clean:
 	rm *.o vcfmerger
+
+install:all
+	install -d $(PREFIX)
+	install vcfmerger $(PREFIX)
+
+remove:
+	rm $(PREFIX)/vcfmerger
