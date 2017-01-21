@@ -24,20 +24,23 @@ vcfmerger $SELECTEDFILES -t 16 > db.vcf 2>log &
 #generate additional files
 vcfmerger $ADDFILES -t 8 > add.vcf 2 >> log &
 
-GENENUM=`wc -l $GENEFILE`
+GENENUM=`wc -l $GENEFILE | cut -d' ' -f1`
 #generate querys 
+echo $SELECTEDFILES | sed 's/ /\n/g' | shuf | head -n $GENENUM > SSAMPLES
 
-QUERYFLNAME=`echo $SELECTEDFILES | sed 's/ /\n/g' | shuf | head -n $GENENUM`
+paste -d'\t' SSAMPLES $GENEFILE > HSAMPLES
 
-for i in $QUERYFLNAME
+while read -r samplePath chrm start end
 do
-		
-done	
+	prefix=`basename $samplePath`
+	bcftools view $chrm:$start-$end > "$prefix".vcf 	
+done < HSAMPLES	
 
+rm -f SSAMPLES HSAMPLES 
 #use query to align
 
 
-#generate  
+#generate    
 
 
 #wait
