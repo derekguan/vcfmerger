@@ -16,8 +16,8 @@ using namespace cre;
 using namespace std;
 
 static inline void getRootName(const char * FileName, char * RootName);
-static inline void mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const char * RRootName, uint & LSampleNum, uint & RSampleNum);
-static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const uint &LSampleNum, const uint &RSampleNum);
+static inline int mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const char * RRootName, uint & LSampleNum, uint & RSampleNum);
+static inline int mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const uint &LSampleNum, const uint &RSampleNum);
 
 static inline void removeTailingN(char * str, uint Length=0)//to remove a tailing \n(if there is one).You can provide the Length of Buffer to avoid recalculating.
 
@@ -44,21 +44,29 @@ static inline int chromCompare(const char * A, const char * B)//return -1 if A<B
 	return strcmp(A,B);
 }
 
-void merge2(const char * LFileName, const char * RFileName, const char * OutFileName)
+int merge2(const char * LFileName, const char * RFileName, const char * OutFileName)
 {
+	//fprintf(stderr,"%s\t%s\n", LFileName, RFileName);
 	char LRootName[NAME_BUFFER_SIZE], RRootName[NAME_BUFFER_SIZE];
 	getRootName(LFileName,LRootName);
 	getRootName(RFileName,RRootName);
 	FILE * LFile=fopen(LFileName, "r");
-	if (LFile==NULL) die("Open left file failed!");
+	//if (LFile==NULL) die("Open left file failed!");
+	if (LFile==NULL) {
+		fprintf(stderr,"open left file failed\n");
+		return -1;
+	}	
 	FILE * RFile=fopen(RFileName, "r");
 	FILE * OutFile=NULL;
-	if (RFile==NULL) die("Open right file failed!");
+	if (RFile==NULL) return -1;
 	if (OutFileName[0]=='\0') OutFile=stdout;
 	else
 	{
 		OutFile=fopen(OutFileName, "w");
-		if (OutFile==NULL) die("Open out file failed!");
+		if (OutFile==NULL) {
+			fprintf(stderr, "failed to open output file\n");
+			return -1;
+		}
 	}
 
 	char *LBuffer=myalloc(BUFFER_SIZE,char);
@@ -66,7 +74,8 @@ void merge2(const char * LFileName, const char * RFileName, const char * OutFile
 
 	uint LSampleNum, RSampleNum;
 
-	mergeHead(LFile,RFile,OutFile, LBuffer, RBuffer, RRootName, LSampleNum, RSampleNum);
+	if (mergeHead(LFile,RFile,OutFile, LBuffer, RBuffer, RRootName, LSampleNum, RSampleNum))
+		return -1;
 	mergeSites(LFile,RFile,OutFile, LBuffer, RBuffer, LSampleNum, RSampleNum);
 
 	free(LBuffer);
@@ -89,18 +98,24 @@ static inline void getRootName(const char * FileName, char * RootName)
 	}
 }
 
-static inline void mergeHeader(char* LBuffer, char* RBuffer, const char * RRootName, FILE* OutFile, uint &LSampleNum, uint &RSampleNum);
-static inline void mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const char * RRootName, uint &LSampleNum, uint &RSampleNum)
+static inline int mergeHeader(char* LBuffer, char* RBuffer, const char * RRootName, FILE* OutFile, uint &LSampleNum, uint &RSampleNum);
+static inline int mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const char * RRootName, uint &LSampleNum, uint &RSampleNum)
 {
 	list<string> LHeads, RHeads;
 	//get L heads
 	while(fgets(LBuffer, BUFFER_SIZE, LFile))
 	{
 		uint Length=strlen(LBuffer);
-		if (Length==0) die("Read heads error");
+		if (Length==0) {
+			fprintf(stderr,"Read heads error\n");
+			return -1;
+		}
 		if (Length>=2&&LBuffer[0]=='#'&&LBuffer[1]=='#')
 		{
-			if (Length==BUFFER_SIZE-1) die("Buffer may not be enough!");
+			if (Length==BUFFER_SIZE-1) {
+				fprintf(stderr,"Buffer may not be enough!");
+				return -1;		
+			}
 			if (Length>0&&LBuffer[Length-1]=='\n')
 			{
 				LBuffer[--Length]='\0';
@@ -113,10 +128,16 @@ static inline void mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuf
 	while(fgets(RBuffer, BUFFER_SIZE, RFile))
 	{
 		uint Length=strlen(RBuffer);
-		if (Length==0) die("Read heads error");
+		if (Length==0) {
+			fprintf(stderr,"Read heads error");	
+			return -1;	
+		}
 		if (Length>=2&&RBuffer[0]=='#'&&RBuffer[1]=='#')
 		{
-			if (Length==BUFFER_SIZE-1) die("Buffer may not be enough!");
+			if (Length==BUFFER_SIZE-1) {
+				fprintf(stderr,"Buffer may not be enough!");
+				return -1;	
+			}
 			if (Length>0&&RBuffer[Length-1]=='\n')
 			{
 				RBuffer[--Length]='\0';
@@ -143,13 +164,19 @@ static inline void mergeHead(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuf
 	{
 		fprintf(OutFile,"%s\n",j->c_str());
 	}
-	mergeHeader(LBuffer, RBuffer, RRootName, OutFile, LSampleNum, RSampleNum);
+	return mergeHeader(LBuffer, RBuffer, RRootName, OutFile, LSampleNum, RSampleNum);
 }
 
-static inline void mergeHeader(char* LBuffer, char* RBuffer, const char* RRootName, FILE* OutFile, uint & LSampleNum, uint & RSampleNum)
+static inline int mergeHeader(char* LBuffer, char* RBuffer, const char* RRootName, FILE* OutFile, uint & LSampleNum, uint & RSampleNum)
 {
-	if (LBuffer[0]!='#') die("Can't read left's header!");
-	if (RBuffer[0]!='#') die("Can't read right's header!");
+	if (LBuffer[0]!='#') {
+		fprintf(stderr, "Can't read left's header!");	
+		return -1;	
+	} 
+	if (RBuffer[0]!='#') {
+		fprintf(stderr,"Can't read right's header!\n");	
+		return -1;	
+	}
 	char * Buffer = myalloc(SMALL_BUFFER_SIZE, char);
 	stringstream SS;
 	set<string> LSamplesSet, RSamplesSet;
@@ -160,7 +187,10 @@ static inline void mergeHeader(char* LBuffer, char* RBuffer, const char* RRootNa
 	while(SS>>Buffer)
 	{
 		if(SS.eof()) break;
-		if (LSamplesSet.count(Buffer)!=0) die("Left file has duplicate samplenames!");
+		if (LSamplesSet.count(Buffer)!=0) {
+			fprintf(stderr,"Left file has duplicate samplenames!\n");
+			return -1;	
+		}
 		LSamplesSet.insert(Buffer);
 		LSamples.push_back(Buffer);
 	}
@@ -175,12 +205,18 @@ static inline void mergeHeader(char* LBuffer, char* RBuffer, const char* RRootNa
 		{
 			uint RRootLength=strlen(RRootName);
 			uint BufferLength=strlen(Buffer);
-			if (RRootLength+BufferLength+1>=SMALL_BUFFER_SIZE) die("Small buffer is too small!");
+			if (RRootLength+BufferLength+1>=SMALL_BUFFER_SIZE) {
+				fprintf(stderr,"Small buffer is too small!");
+				return -1;
+			}
 			memmove(Buffer+RRootLength+1, Buffer, BufferLength+1);
 			memcpy(Buffer, RRootName, RRootLength);
 			Buffer[RRootLength]='_';
 		}
-		if (RSamplesSet.count(Buffer)!=0) die("Left file has duplicate samplenames!");
+		if (RSamplesSet.count(Buffer)!=0) {
+			fprintf(stderr, "Left file has duplicate samplenames!");
+			return -1;	
+		}
 		RSamplesSet.insert(Buffer);
 		RSamples.push_back(Buffer);
 	}
@@ -198,6 +234,7 @@ static inline void mergeHeader(char* LBuffer, char* RBuffer, const char* RRootNa
 	RSampleNum=RSamples.size();
 
 	free(Buffer);
+	return 0;
 }
 
 class Site
@@ -257,11 +294,12 @@ static inline uint findTheDataOutset(const char * Buffer, uint Length=0)//return
 			return i+1;
 		}
 	}
-	die("Something wrong with the data(not enough \\t before data!).");
+	//fprintf(stderr,"%s\n",Buffer);
+	fprintf(stderr,"Something wrong with the data(not enough \\t before data!).");
 	return 0;
 }
 
-static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const uint &LSampleNum, const uint &RSampleNum)
+static inline int mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBuffer, char* RBuffer, const uint &LSampleNum, const uint &RSampleNum)
 {
 	uint LLength, RLength, RDIndex;
 	Site LSite, RSite;
@@ -285,6 +323,7 @@ static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBu
 		{
 			removeTailingN(RBuffer,RLength);
 			RDIndex=findTheDataOutset(RBuffer,RLength);
+			if (!RDIndex) return -1;
 			fprintf(OutFile,"\n");
 			fwrite(RBuffer, 1, RDIndex-1, OutFile);//doesn't include the last \t
 			for (uint i=0;i<LSampleNum;++i)
@@ -314,6 +353,7 @@ static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBu
 			{
 				LReside=true;
 				RDIndex=findTheDataOutset(RBuffer,RLength);
+				if (!RDIndex) return -1;
 				fprintf(OutFile,"\n");
 				fwrite(RBuffer, 1, RDIndex-1, OutFile);//doesn't include the last \t
 				for (uint i=0;i<LSampleNum;++i)
@@ -333,6 +373,7 @@ static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBu
 					removeTailingN(LBuffer,LLength);
 					removeTailingN(RBuffer,RLength);
 					RDIndex=findTheDataOutset(RBuffer,RLength);
+					if (!RDIndex) return -1;
 					fprintf(OutFile,"\n%s", LBuffer);
 					if (RSampleNum!=0) fprintf(OutFile,"\t%s",RBuffer+RDIndex);
 				}
@@ -351,4 +392,5 @@ static inline void mergeSites(FILE* LFile, FILE* RFile, FILE* OutFile, char* LBu
 	free(RRef);
 	free(LAlt);
 	free(RAlt);
+	return 0; 
 }

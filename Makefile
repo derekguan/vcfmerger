@@ -28,4 +28,4 @@ install:all
 	install vcfmerger $(PREFIX)
 
 remove:
-	rm $(PREFIX)/vcfmerger
+	rm -f $(PREFIX)/vcfmerger
